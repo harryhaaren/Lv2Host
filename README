@@ -1,0 +1,20 @@
+
+      Lv2Host
+
+This is a very simple C++ class that will load an
+LV2 plugin. I do not claim that this is the best 
+way to load plugins, or the only way. It is a way
+though.
+
+It uses the Lilv library, written by David Robbilard
+(see http://drobilla.net/software/lilv/ for details)
+
+The interface is designed to allow easy interaction
+with JACK clients, ie: request based processing, and
+processing "nframes" at a time.
+
+This code is released under LGPL, see the copyright
+notices at the top of the files for info.
+
+-Harry van Haaren   2011
+ <harryhaaren@gmail.com>
