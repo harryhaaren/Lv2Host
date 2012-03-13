@@ -6,7 +6,7 @@ LV2 plugin. I do not claim that this is the best
 way to load plugins, or the only way. It is a way
 though.
 
-It uses the Lilv library, written by David Robbilard
+It uses the Lilv library, written by David Robillard
 (see http://drobilla.net/software/lilv/ for details)
 
 The interface is designed to allow easy interaction
