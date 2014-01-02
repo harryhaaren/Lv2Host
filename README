@@ -1,4 +1,9 @@
-
+=== WARNING ===
+This code is outdated, and I've been informed it
+no longer compiles with gcc. Atom ports are not
+supported by this class, so most synths won't work.
+=== /WARNING ==
+      
       Lv2Host
 
 This is a very simple C++ class that will load an
