@@ -1,0 +1,7 @@
+
+Todo list:
+-Fix audio processing code (buffers not provided / attached)
+-Update plugin Lilv world loading: currently its hacked together
+-Add atom message support using Lv2_ezbuf
+-add MIDI extension, adding support for synths
+
