@@ -81,7 +81,7 @@ class Lv2Host
     
     void loadPlugin(std::string);
     
-    void process(unsigned int nframes);
+    void process(unsigned int nframes, float* audioBuffer);
   
   protected:
     int ID;
@@ -138,17 +138,17 @@ class Lv2Host
     
     void analysePorts();
     
-    void connectPorts(float*);
+    void connectPorts(float* audioBuffer);
     
     void checkSuitablility();
     void instantiatePlugin();
     void loadLibrary( std::string filename );
-    
+
     // buffers to pass in / out control / audio data
     std::vector<float> controlBuffer;
     std::vector<float> controlOutputBuffer;
     
-    std::vector<float> outputBuffer;
+
     
     std::vector< PortDetails* > portDetails;
     
