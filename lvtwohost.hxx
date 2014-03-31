@@ -71,7 +71,7 @@ class PortDetails
 class Lv2Host
 {
   public:
-    Lv2Host(int track, int samplerate, std::string path, int pluginNumber = 0);
+    Lv2Host(int track, int samplerate, int audioBufferSize, std::string path, int pluginNumber = 0);
     ~Lv2Host();
     
     void printInfo();
@@ -81,7 +81,8 @@ class Lv2Host
     
     void loadPlugin(std::string);
     
-    void process(unsigned int nframes, float* audioBuffer);
+    void process(unsigned int nframes);
+    float** getAudioBuffers();
   
   protected:
     int ID;
@@ -134,11 +135,13 @@ class Lv2Host
     int controlInputPort;
     
     int oscNframeCounter;
+
+    int audioBufferSize;
     
     
     void analysePorts();
     
-    void connectPorts(float* audioBuffer);
+    void connectPorts();
     
     void checkSuitablility();
     void instantiatePlugin();
@@ -147,8 +150,8 @@ class Lv2Host
     // buffers to pass in / out control / audio data
     std::vector<float> controlBuffer;
     std::vector<float> controlOutputBuffer;
-    
 
+    float** audioBuffers;
     
     std::vector< PortDetails* > portDetails;
     
