@@ -26,12 +26,6 @@ Lv2Host::Lv2Host( int t, int samprate, std::string path, int pluginNumber ) :
   track( t ),
   samplerate( samprate )
 {
-  ID = privateID++;
-  
-  initialized = false;
-  
-  outputBuffer.resize( 1024 );
-  
   numPorts = 0;
   numControlInputs = 0;
   numControlOutputs= 0;
@@ -52,8 +46,7 @@ void Lv2Host::loadPlugin(std::string inPluginUriStr)
 {
   std::cout << "Lv2Host::loadPlugin()!" << std::endl;
   
-  
-  // A world contains all the info about every plugin on the system
+    // A world contains all the info about every plugin on the system
   world = new Lilv::World();
   
   std::cout << "LvTwoHost(): lilv loads world of plugins now" << std::endl;
@@ -82,7 +75,7 @@ void Lv2Host::loadPlugin(std::string inPluginUriStr)
   getPluginPorts( world, plugin );
   
   //   Create new instance
-  instance = new Lilv::Instance ( p, samplerate );
+  instance = Lilv::Instance::create(p, samplerate, NULL);
   
   numPorts = (int)plugin->get_num_ports();
   
@@ -181,18 +174,19 @@ void Lv2Host::getPluginPorts(Lilv::World* world, Lilv::Plugin* plugin)
     Lilv::Node portSymb = port.get_symbol();
     
     // port ID, and name
-    //std::cout << "\tPort Num:" << i << "\tName: " << portName.as_string() << "\tType:   ";
+    std::cout << "\tPort Num:" << i << "\tName: " << portName.as_string() << "\tType:   ";
     
     // portDetails vector, one instance of class per port, use that in the process callback
     portDetails.push_back(  new PortDetails() );
     
-    if ( port.is_a( audio ) ) { /*std::cout << "Audio ";*/      portDetails.at(portDetails.size()-1)->audio    = true; }
-    if ( port.is_a( event ) ) { /*std::cout << "Event ";*/      portDetails.at(portDetails.size()-1)->event    = true; }
-    if ( port.is_a(midiEvent)){ /*std::cout << "Midi event ";*/ portDetails.at(portDetails.size()-1)->midiEvent= true; }
-    if ( port.is_a( control)) { /*std::cout << "Control ";*/    portDetails.at(portDetails.size()-1)->control  = true; }
-    if ( port.is_a( input ) ) { /*std::cout << " input ";*/     portDetails.at(portDetails.size()-1)->input    = true; }
-    if ( port.is_a( output )) { /*std::cout << " output ";*/    portDetails.at(portDetails.size()-1)->output   = true; }
-    
+    if ( port.is_a( audio ) ) { std::cout << "Audio ";      portDetails.at(portDetails.size()-1)->audio    = true; }
+    if ( port.is_a( event ) ) { std::cout << "Event ";      portDetails.at(portDetails.size()-1)->event    = true; }
+    if ( port.is_a(midiEvent)){ std::cout << "Midi event "; portDetails.at(portDetails.size()-1)->midiEvent= true; }
+    if ( port.is_a( control)) { std::cout << "Control ";    portDetails.at(portDetails.size()-1)->control  = true; }
+    if ( port.is_a( input ) ) { std::cout << " input ";     portDetails.at(portDetails.size()-1)->input    = true; }
+    if ( port.is_a( output )) { std::cout << " output ";    portDetails.at(portDetails.size()-1)->output   = true; }
+
+    std::cout << std::endl;
     // store MIN MAX & DEFAULT values (got them earlier)
     portDetails.at(portDetails.size()-1)->min = minArray.at(i);
     portDetails.at(portDetails.size()-1)->max = maxArray.at(i);
@@ -373,7 +367,7 @@ void Lv2Host::setParameterAbsolute(int param, float value)
     std::cout << "Lv2Host::setParameter() accesing out of bounds, param:" << param << std::endl;
 }
 
-void Lv2Host::connectPorts(float* audioOutput)
+void Lv2Host::connectPorts(float* audioBuffer)
 {
   int controlBufCount = 0;
   
@@ -381,24 +375,24 @@ void Lv2Host::connectPorts(float* audioOutput)
   {
     if( portDetails.at(i)->audio && portDetails.at(i)->input )
     {
-      //std::cout << "Connecting Audio Input!  port #: " << i << std::endl;
-      instance->connect_port( i, audioOutput ); // same buffer, ie RunInplace
+      std::cout << "Connecting Audio Input!  port #: " << i << std::endl;
+      instance->connect_port( i, audioBuffer); // same buffer, ie RunInplace
     }
     else if( portDetails.at(i)->audio && portDetails.at(i)->output )
     {
-      //std::cout << "Connecting Audio Output!  port #: " << i << std::endl;
-      instance->connect_port( i, audioOutput );
+      std::cout << "Connecting Audio Output!  port #: " << i << std::endl;
+      instance->connect_port( i, audioBuffer);
     }
     
     else if( portDetails.at(i)->control && portDetails.at(i)->input )
     {
-      //std::cout << "Connecting Control Input!  port #: " << i << std::endl;
+      std::cout << "Connecting Control Input!  port #: " << i << std::endl;
       instance->connect_port( i, &controlBuffer[controlBufCount] );
       controlBufCount++; // increment so we connect the next port to the next buffer
     }
     else if( portDetails.at(i)->control && portDetails.at(i)->output )
     {
-      //std::cout << "Connecting Control Output!  port #: " << i << std::endl;
+      std::cout << "Connecting Control Output!  port #: " << i << std::endl;
       instance->connect_port( i, &controlOutputBuffer.at(i) );
     }
     else
@@ -406,43 +400,25 @@ void Lv2Host::connectPorts(float* audioOutput)
       // we don't know how to connect this port properly, its an
       // unknown type, so don't let the plugin run, as it will segfault
       // when running with an un-connected port
-      initialized = 0;
+        std::cout << "Port could not be connected #: " << i << std::endl;
+        initialized = 0;
     }
   }
 }
 
-void Lv2Host::process(unsigned int nframes)
+void Lv2Host::process(unsigned int nframes, float* audioBuffer)
 {
-  float* buffer = 0; //= buffers->audio[Buffers::TRACK_0 + track];
-  
   if( initialized != 1 )
   {
     std::cout << "Lv2Host::process(): Warning: Running uninitialized plugin!" << std::endl;
     return;
   }
   
-  //std::cout << "Lv2Host::process(): running NOW!"  << std::endl;
+  std::cout << "Lv2Host::process(): running NOW!"  << std::endl;
   
-  controlBuffer[0] = 0.f; // active
-  controlBuffer[1] = 220.f; // freq
-  controlBuffer[2] = 0.f; // trim
-  
-  instance->connect_port( 0, &controlBuffer[0] );
-  instance->connect_port( 1, &controlBuffer[1] );
-  instance->connect_port( 2, &controlBuffer[2] );
-  instance->connect_port( 3, &outputBuffer[0]  );
-  instance->connect_port( 4, &controlBuffer[4] );
-  
-  //connectPorts(buffer);
+  connectPorts(audioBuffer);
   
   instance->run(nframes);
-  
-  for ( int i = 0; i < nframes; i++ )
-  {
-    *buffer++ = outputBuffer[i];
-  }
-  
-  //print ("Lv2Host::process(): Warning: Running uninitialized plugin!");
   return;
 }
 
@@ -450,4 +426,3 @@ Lv2Host::~Lv2Host()
 {
   std::cout << "~Lv2Host() destroyed" << std::endl;
 }
-
