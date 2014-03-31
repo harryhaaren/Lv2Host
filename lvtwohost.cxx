@@ -36,8 +36,6 @@ Lv2Host::Lv2Host( int t, int samprate, std::string path, int pluginNumber ) :
     controlOutputBuffer.push_back(0.0);
   }
   
-  initialized = false;
-  
   std::string loadString = path;
   loadPlugin( path );
 }
@@ -196,19 +194,20 @@ void Lv2Host::getPluginPorts(Lilv::World* world, Lilv::Plugin* plugin)
     {
       portDetails.at(portDetails.size()-1)->logarithmic = true;
     }
-    
+
+    controlBuffer.push_back(0.0);
+    controlOutputBuffer.push_back(0.0);
     if ( port.is_a(control) && port.is_a( input ) )
     {
-      // keep track of how many ctrl-ins we have
-      numControlInputs++;
-      
       // push the "i" value, and its corresponding name onto a map,
       // to be retrived later when changing parameters
       paramNameMap.insert( std::pair<int, std::string>(i, portName.as_string()));
-    }
-    else
-    {
-      paramNameMap.insert( std::pair<int, std::string>(i, "Not Control && input port" ));
+      // keep track of how many ctrl-ins we have
+      numControlInputs++;
+      setParameter(i, portDetails.at(i)->def);
+
+    } else {
+        paramNameMap.insert(std::pair<int, std::string>(i, "not a control input port"));
     }
     
     //std::cout << std::endl;
@@ -266,133 +265,74 @@ void Lv2Host::printInfo()
   std::cout << "Lv2Host plugin:" << pluginString << " Init: " <<  initialized;
 }
 
-void Lv2Host::setParameter(int param, float value)
-{
-  std::string name;
-  
-  if (param >= 0 && param < numControlInputs ) // range check the parameter
-  {
-    std::map<int,std::string>::iterator iter = paramNameMap.find(param);
-    
-    if (iter != paramNameMap.end() ) 
-      name = iter->second;
-    else
-      name = "invalid value";
-    
-    int clampedValue = value;
-    if (value > 1.0) { clampedValue = 1.0; }
-    if (value < 0.0) { clampedValue = 0.0; }
-    
-    bool minMaxValid = true;
-    
-    // Check MAX value for INF & NAN
-    if ( portDetails.at(param)->max != portDetails.at(param)->max ) {
-      std::cout << name << " has MAX as NAN!" << std::endl;
-      minMaxValid = false;
-    }
-    else if ( std::numeric_limits<float>::has_infinity && portDetails.at(param)->max == std::numeric_limits<float>::infinity() ) {
-      std::cout << name << " has MAX as INF!" << std::endl;
-      minMaxValid = false;
-    }
-    
-    // Check MIN value for INF & NAN
-    if ( portDetails.at(param)->min != portDetails.at(param)->min ) {
-      std::cout << name << " has MIN as NAN!" << std::endl;
-      minMaxValid = false;
-    }
-    else if ( std::numeric_limits<float>::has_infinity && portDetails.at(param)->min == std::numeric_limits<float>::infinity() ) {
-      std::cout << name << " has MIN as INF!" << std::endl;
-      minMaxValid = false;
-    }
-    
-    // deal with logarithmic cases
-    if (portDetails.at(param)->logarithmic)
-    {
-      std::cout << "Log param change!!!" << std::endl;
-      if ( minMaxValid )
-        value = (float) pow(clampedValue , 3) * (portDetails.at(param)->max - portDetails.at(param)->min);
-      else
-      {
-        std::cout << "Warning, guessing limits, as plugin provides NAN / INF" << std::endl;
-        value = ((float)pow(value , 3) * ( 9500 )) + 100;
-      }
-    }
-    else
-    {
-      if ( minMaxValid )
-        value = (clampedValue * (portDetails.at(param)->max - portDetails.at(param)->min)) + portDetails.at(param)->min;
-      else
-      {
-        std::cout << "Warning, guessing limits, as plugin provides NAN / INF" << std::endl;
-      }
-    }
-    
-    std::cout << "Lv2Host::setParameter( " << name <<  ", " << ": " << value << " ) Min:" << portDetails.at(param)->min << "Max:" << portDetails.at(param)->max << std::endl;
-    controlBuffer[param] = value;
-    
-    //rh->sendOsc( Osc::PATH_TRACK_SET_PLUGIN_PARAMETER, -2, ID, param, value );
-  }
-  else
-    std::cout << "Lv2Host::setParameter() accesing out of bounds, param:" << param << std::endl;
-}
-
 /*
 void Lv2Host::subscribeFunction()
 {
 }
 */
 
-void Lv2Host::setParameterAbsolute(int param, float value)
+void Lv2Host::setParameter(int param, float value)
 {
-  // this function should *only* be used to allow the GUI to set its
-  // parameters directly. It should *NOT* be used as OSC interface / anything else
   std::string name;
   
-  if (param >= 0 && param < numControlInputs ) // range check the parameter
+  if (param >= 0 && param < numPorts ) // range check the parameter
   {
-    std::map<int,std::string>::iterator iter = paramNameMap.find(param);
+    if (portDetails.at(param)->control && portDetails.at(param)->input) {
+        std::map<int,std::string>::iterator iter = paramNameMap.find(param);
     
-    if (iter != paramNameMap.end() ) 
-      name = iter->second;
-    else
-      name = "invalid value";
+        if (iter != paramNameMap.end() ) {
+            name = iter->second;
+        } else {
+            name = "invalid value";
+        }
+
+        // check for NaN
+        if (value != value) {
+            value = 0;
+        }
+        // Clamp values to min and max
+        if (portDetails.at(param)->max == portDetails.at(param)->max && value > portDetails.at(param)->max) {
+            value = portDetails.at(param)->max;
+        } else if (portDetails.at(param)->min == portDetails.at(param)->min && value < portDetails.at(param)->min) {
+            value = portDetails.at(param)->min;
+        }
+
+        std::cout << "Lv2Host::setParameter( " << name <<  ", " << ": " << value << " ) Min:" << portDetails.at(param)->min <<"; " << "Max:" << portDetails.at(param)->max << std::endl;
+        controlBuffer[param] = value;
     
-    std::cout << "Lv2Host::setParameter( " << name <<  ", " << ": " << value << " ) Min:" << portDetails.at(param)->min << "Max:" << portDetails.at(param)->max << std::endl;
-    controlBuffer[param] = value;
-    
-    // make GUI redraw
-    //rh->sendOsc( Osc::PATH_TRACK_SET_PLUGIN_PARAMETER_ABSOLUTE, -2, ID, param, value );
+        // make GUI redraw
+        //rh->sendOsc( Osc::PATH_TRACK_SET_PLUGIN_PARAMETER_ABSOLUTE, -2, ID, param, value );
+    } else {
+        std::cout << "Lv2Host::setParameter() not a control input port, param: " << param << std::endl;
+    }
+  } else {
+    std::cout << "Lv2Host::setParameter() accesing out of bounds, param: " << param << std::endl;
   }
-  else
-    std::cout << "Lv2Host::setParameter() accesing out of bounds, param:" << param << std::endl;
 }
 
 void Lv2Host::connectPorts(float* audioBuffer)
 {
-  int controlBufCount = 0;
-  
   for (int i = 0; i < numPorts; i++)
   {
     if( portDetails.at(i)->audio && portDetails.at(i)->input )
     {
-      std::cout << "Connecting Audio Input!  port #: " << i << std::endl;
+      // std::cout << "Connecting Audio Input!  port #: " << i << std::endl;
       instance->connect_port( i, audioBuffer); // same buffer, ie RunInplace
     }
     else if( portDetails.at(i)->audio && portDetails.at(i)->output )
     {
-      std::cout << "Connecting Audio Output!  port #: " << i << std::endl;
+      // std::cout << "Connecting Audio Output!  port #: " << i << std::endl;
       instance->connect_port( i, audioBuffer);
     }
     
     else if( portDetails.at(i)->control && portDetails.at(i)->input )
     {
-      std::cout << "Connecting Control Input!  port #: " << i << std::endl;
-      instance->connect_port( i, &controlBuffer[controlBufCount] );
-      controlBufCount++; // increment so we connect the next port to the next buffer
+      // std::cout << "Connecting Control Input!  port #: " << i << std::endl;
+      instance->connect_port( i, &controlBuffer.at(i) );
     }
     else if( portDetails.at(i)->control && portDetails.at(i)->output )
     {
-      std::cout << "Connecting Control Output!  port #: " << i << std::endl;
+      // std::cout << "Connecting Control Output!  port #: " << i << std::endl;
       instance->connect_port( i, &controlOutputBuffer.at(i) );
     }
     else
@@ -414,7 +354,7 @@ void Lv2Host::process(unsigned int nframes, float* audioBuffer)
     return;
   }
   
-  std::cout << "Lv2Host::process(): running NOW!"  << std::endl;
+  // std::cout << "Lv2Host::process(): running NOW!"  << std::endl;
   
   connectPorts(audioBuffer);
   
