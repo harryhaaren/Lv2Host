@@ -20,15 +20,18 @@
 
 int Lv2Host::privateID = 0;
 
-Lv2Host::Lv2Host( int t, int samprate, std::string path, int pluginNumber ) :
+Lv2Host::Lv2Host( int t, int samprate, int audioBufferSize, std::string path, int pluginNumber) :
   ID ( privateID++ ),
   initialized( false ),
   track( t ),
-  samplerate( samprate )
+  samplerate( samprate ),
+  audioBufferSize ( audioBufferSize )
 {
   numPorts = 0;
   numControlInputs = 0;
   numControlOutputs= 0;
+  numAudioInputs = 0;
+  numAudioOutputs = 0;
   
   for (int i = 0; i < 255; i++)
   {
@@ -88,6 +91,7 @@ void Lv2Host::loadPlugin(std::string inPluginUriStr)
     instance->activate();
     initialized = true;
   }
+  connectPorts();
 }
 
 void Lv2Host::listPlugins( Lilv::Plugins* pluginsList)
@@ -161,6 +165,8 @@ void Lv2Host::getPluginPorts(Lilv::World* world, Lilv::Plugin* plugin)
   
   plugin->get_port_ranges_float(  &minArray[0], &maxArray[0],&defArray[0]);
   
+
+  audioBuffers = new float*[numPorts];
   
   for (int i = 0; i < numPorts; i++)
   {
@@ -206,11 +212,15 @@ void Lv2Host::getPluginPorts(Lilv::World* world, Lilv::Plugin* plugin)
       numControlInputs++;
       setParameter(i, portDetails.at(i)->def);
 
+    } else if (port.is_a(control) && port.is_a(input)) {
+        paramNameMap.insert(std::pair<int, std::string>(i, "not a control input port"));
+        numAudioInputs++;
+    } else if (port.is_a(control) && port.is_a(output)) {
+        paramNameMap.insert(std::pair<int, std::string>(i, "not a control input port"));
+        numAudioOutputs++;
     } else {
         paramNameMap.insert(std::pair<int, std::string>(i, "not a control input port"));
     }
-    
-    //std::cout << std::endl;
     
     int counter = 0;
     for ( LilvIter* i = portNodes.begin(); !portNodes.is_end(i); i = portNodes.next(i), counter++ )
@@ -310,19 +320,21 @@ void Lv2Host::setParameter(int param, float value)
   }
 }
 
-void Lv2Host::connectPorts(float* audioBuffer)
+void Lv2Host::connectPorts()
 {
   for (int i = 0; i < numPorts; i++)
   {
     if( portDetails.at(i)->audio && portDetails.at(i)->input )
     {
-      // std::cout << "Connecting Audio Input!  port #: " << i << std::endl;
-      instance->connect_port( i, audioBuffer); // same buffer, ie RunInplace
+      std::cout << "Connecting Audio Input!  port #: " << i << std::endl;
+      audioBuffers[i] = new float[audioBufferSize];
+      instance->connect_port( i, audioBuffers[i]);
     }
     else if( portDetails.at(i)->audio && portDetails.at(i)->output )
     {
-      // std::cout << "Connecting Audio Output!  port #: " << i << std::endl;
-      instance->connect_port( i, audioBuffer);
+      std::cout << "Connecting Audio Output!  port #: " << i << std::endl;
+      audioBuffers[i] = new float[audioBufferSize];
+      instance->connect_port( i, audioBuffers[i]);
     }
     
     else if( portDetails.at(i)->control && portDetails.at(i)->input )
@@ -346,7 +358,11 @@ void Lv2Host::connectPorts(float* audioBuffer)
   }
 }
 
-void Lv2Host::process(unsigned int nframes, float* audioBuffer)
+float** Lv2Host::getAudioBuffers() {
+    return audioBuffers;
+}
+
+void Lv2Host::process(unsigned int nframes)
 {
   if( initialized != 1 )
   {
@@ -355,9 +371,6 @@ void Lv2Host::process(unsigned int nframes, float* audioBuffer)
   }
   
   // std::cout << "Lv2Host::process(): running NOW!"  << std::endl;
-  
-  connectPorts(audioBuffer);
-  
   instance->run(nframes);
   return;
 }

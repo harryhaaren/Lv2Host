@@ -21,38 +21,39 @@
 
 int main(int argc, char** argv)
 {
-  float* audio = new float[44100 * 10];
+  float* audioIn = new float[44100 * 5];
+  float* audioOut = new float[44100 * 10];
 
-  SndfileHandle outfile( "lvtwohostTest.wav" , SFM_WRITE,  SF_FORMAT_WAV | SF_FORMAT_FLOAT , 1 , 44100);
+  SndfileHandle outfile( "lvtwohostTest.wav" , SFM_WRITE,  SF_FORMAT_WAV | SF_FORMAT_FLOAT , 2 , 44100);
 
   // instantiate LV2 host class
-  std::string pluginURI = "http://www.openavproductions.com/artyfx#roomy";
-  Lv2Host* host = new Lv2Host( 0, 44100, pluginURI );
+  std::string pluginURI = "http://www.openavproductions.com/artyfx#satma";
+  Lv2Host* host = new Lv2Host( 0, 44100, 1024, pluginURI );
 
   // process buffer size
   int nframes = 128;
 
   SndfileHandle infile("test.wav");
-  infile.read(audio, 44100 * 10);
-
-  float* audioBuffer = new float[nframes];
-  for (int i = 0; i < ceil(44100 * 10 / 128); i++) {
-        for (int x = 0; x < 128; x++) {
-            audioBuffer[x] = audio[i * 128 + x];
-        }
-        host->process(nframes, audioBuffer);
-        // copy output
-        for (int x = 0; x < 128; x++) {
-            audio[i * 128 + x] = audioBuffer[x];
-        }
-  }
+  infile.read(audioIn, 44100 * 10);
   
+  float** audioBuffers = host->getAudioBuffers();
+
+  for (int i = 0; i < ceil(44100 * 5 / 128); i++) {
+      // copy input
+      std::copy(&audioIn[i * 128], &audioIn[i * 128] + 128, audioBuffers[0]);
+      host->process(nframes);
+      // copy output
+      for (int x = 0; x < 128; x++) {
+          audioOut[i * 256 + 2 * x] = audioBuffers[1][x];
+          audioOut[i * 256 + 1 + 2 * x] = audioBuffers[1][x];
+      }
+  }
+
   // save audio to disk
-  outfile.write(audio, 44100 * 10);
+  outfile.write(audioOut, 44100 * 10);
   
   // cleanup
   delete host;
-  delete[] audio;
-  delete[] audioBuffer;
+  delete[] audioIn;
   return 0;
 }
