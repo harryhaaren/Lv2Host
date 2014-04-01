@@ -26,7 +26,7 @@ int main(int argc, char** argv)
   SndfileHandle outfile( "lvtwohostTest.wav" , SFM_WRITE,  SF_FORMAT_WAV | SF_FORMAT_FLOAT , 1 , 44100);
 
   // instantiate LV2 host class
-  std::string pluginURI = "http://www.openavproductions.com/artyfx#satma";
+  std::string pluginURI = "http://www.openavproductions.com/artyfx#roomy";
   Lv2Host* host = new Lv2Host( 0, 44100, pluginURI );
 
   // process buffer size
